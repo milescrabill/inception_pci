@@ -27,6 +27,10 @@ import binascii
 import os
 import platform
 import sys
+import usb.core
+import usb.util
+import struct
+import math
 
 
 def hexstr2bytes(s):
@@ -135,6 +139,66 @@ def restart():
     python = sys.executable
     os.execl(python, python, * sys.argv)
 
+class SlotScreamer:
+    '''
+    interface to the SlotScreamer native PCIe device over USB with pyusb
+    '''
+
+    def __init__(self):
+        '''
+        Constructor
+        '''
+        # find our device
+        self.dev = usb.core.find(idVendor=0x0525, idProduct=0x3380)
+        if self.dev is None:
+            raise ValueError('Device not found')
+        self.dev.set_configuration()
+        self.cfg = self.dev.get_active_configuration()
+        self.intf=self.cfg[0,0]
+        self.pciin = usb.util.find_descriptor(self.intf,custom_match = lambda e: e.bEndpointAddress==0x8e)
+        assert self.pciin is not None
+        sys.stdout.write('PCIIN found: '+str(self.pciin)+'\n')
+        self.pciout = usb.util.find_descriptor(self.intf,custom_match = lambda e: e.bEndpointAddress==0xe)
+        assert self.pciout is not None
+        sys.stdout.write('PCIOUT found: '+str(self.pciout)+'\n')
+    
+    def read(self, addr, numb, buf=None):
+        result=[]
+        dwords=math.ceil(numb/4)
+        #for each 64k block
+        while dwords>=0x40:
+            #build the write packet
+            self.pciout.write(struct.pack('BBBBI',0xcf,0,0,0x40,addr))
+            result+=self.pciin.read(0x100)
+            dwords-=0x40
+            addr+=0x40
+        if dwords>0:
+            self.pciout.write(struct.pack('BBBBI',0xcf,0,0,dwords%0x40,addr))
+            result+=self.pciin.read(0x100)
+        return struct.pack('B'*len(result),*result)    
+
+    def readv(self,req):
+        for r in req:
+            yield(r[0],self.read(r[0],r[1]))
+
+    def write(self, addr, buf):
+        dwords=math.ceil(len(buf)/4)
+        buf2=bytearray(dwords*4)
+        #buf2=buf[:]
+        #need to copy buf to buf2 and pad zeros, likely on both sides depending on dword alignment of the address. Need to properly set byte enables in the pciout write (bits 0-3, the f in 0x4f)
+        offset=0
+        print("addr:",addr," buf2:",buf2,"\n")
+        while dwords>=0x40:
+            #build the write packet
+            self.pciout.write(struct.pack('BBBBI',0x4f,0,0,0x40,addr)+buf2[offset*4:offset*4+0x40])
+            dwords-=0x40
+            addr+=0x40
+            offset+=0x40
+        if dwords>0:
+            print (struct.pack('BBBBI',0x4f,0,0,dwords%0x40,addr))
+            print (buf[offset*4:])
+            self.pciout.write(struct.pack('BBBBI',0x4f,0,0,dwords%0x40,addr)+buf2[offset*4:])
+        
 
 class MemoryFile:
     '''

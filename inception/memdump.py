@@ -57,7 +57,7 @@ def dump(start, end):
               .format(start, end, s))
     
     # Initialize and lower DMA shield
-    if not cfg.filemode:
+    if not cfg.filemode and not cfg.pciemode:
         fw = firewire.FireWire()
         starttime = time.time()
         device_index = fw.select_device()
@@ -68,6 +68,8 @@ def dump(start, end):
     device = None
     if cfg.filemode:
         device = util.MemoryFile(cfg.filename, cfg.PAGESIZE)
+    elif cfg.pciemode:
+        device = util.SlotScreamer()
     else:
         elapsed = int(time.time() - starttime)
         device = fw.getdevice(device_index, elapsed)

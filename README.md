@@ -1,3 +1,55 @@
+Inception plus native Pcie
+==========================
+
+This fork of inception includes support for native driverless pcie using 
+SLOTSCREAMER from the NSA Playset(TM).
+This code runs on the USB side of the SLOTSCREAMER device. There is no
+software needed on the pcie/expresscard/thunderbolt side.
+
+There are still TODOs in the code but it mostly works. I tested it on
+ubuntu 14.04. here's the setup sequence:
+
+```
+git clone https://github.com/walac/pyusb.git
+cd pyusb
+sudo python3 setup.py install
+cd ..
+git clone  git://git.freddie.witherden.org/forensic1394.gitm
+cd forensic1394/
+mkdir build
+cd build
+cmake -G"Unix Makefiles" ../
+make
+sudo make install
+cd ../python
+sudo python3 setup.py install
+cd ../../
+git clone https://github.com/milescrabill/inception_pci.git
+cd inception_pci
+sudo incept -N
+```
+
+notes:
+* inception wants python3 so make sure pyusb and forensic1394 are installed there
+* forensic1394 is not used but is a dependency of inception
+
+changes:
+* added a SLOTSCREMER class to inception/util.py modeled after MemoryFile
+* added necessary imports to util.py
+* added pciemode to cfg.py and -N NativePCIe option in incept
+* added switches for pcimode to both screenlock.py and memdump.py
+* tweaked ascii art graphic
+
+todos:
+* support byte enables and padding of read/writes. Right now it just rounds up to dword
+* put better error checking in everything
+* figure out if usb init code could be cleaner
+* figure out why libusb error happens on exit
+* enhance performace? perhaps setup and use DMA directly on the 3380?
+* figure out how to remove pyusb requirement when using firewire
+* figure out how to remove forensic1394 requirement when using pcie
+
+
 Inception
 =========
 

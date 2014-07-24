@@ -39,11 +39,19 @@ def banner():
     '''
     if (term.size() > 79):
         print('''
- _|  _|      _|    _|_|_|  _|_|_|_|  _|_|_|    _|_|_|  _|    _|_|    _|      _|
- _|  _|_|    _|  _|        _|        _|    _|    _|    _|  _|    _|  _|_|    _|
- _|  _|  _|  _|  _|        _|_|_|    _|_|_|      _|    _|  _|    _|  _|  _|  _|
- _|  _|    _|_|  _|        _|        _|          _|    _|  _|    _|  _|    _|_|
- _|  _|      _|    _|_|_|  _|_|_|_|  _|          _|    _|    _|_|    _|      _|
+   _|  _|      _|    _|_|_|  _|_|_|_|  _|_|_|    _|_|_|  _|    _|_|    _|      _|
+   _|  _|_|    _|  _|        _|        _|    _|    _|    _|  _|    _|  _|_|    _|
+   _|  _|  _|  _|  _|        _|_|_|    _|_|_|      _|    _|  _|    _|  _|  _|  _|
+   _|  _|    _|_|  _|        _|        _|          _|    _|  _|    _|  _|    _|_|
+   _|  _|      _|    _|_|_|  _|_|_|_|  _|          _|    _|    _|_|    _|      _|
+ 
+                                      Now, with
+
+ _|  _|      _|  _|      _|    _|_|_|    _|_|      _|_|_|      _|_|_|  _|  _|_|_|_|
+ _|  _|_|    _|  _|_|    _|      _|    _|    _|    _|    _|  _|        _|  _|
+ _|  _|  _|  _|  _|  _|  _|      _|    _|    _|    _|_|_|    _|        _|  _|_|_|
+ _|  _|    _|_|  _|    _|_|      _|    _|    _|    _|        _|        _|  _|
+ _|  _|      _|  _|      _|      _|      _|_|      _|          _|_|_|  _|  _|_|_|_|
 ''')
     else:
         print('''
@@ -77,13 +85,13 @@ def main(argv):
     
     # Parse args
     try:
-        opts, args = getopt.getopt(argv[1:], 'bd:Def:hlvw:npum:stP:ra', 
+        opts, args = getopt.getopt(argv[1:], 'bd:Def:hlvw:npum:stP:raN', 
                                    ['businfo', 'dump=', 'dump-all', 'egg', 
                                     'file=', 'force-write', 'help', 'list', 
                                     'verbose', 'wait=', 'no-write', 
                                     'pickpocket', 'unload', 'manual=', 
                                     'signatures', 'patch-file=', 'revert',
-                                    'test', 'avoid'])
+                                    'test', 'avoid', 'NativePCIe'])
     except getopt.GetoptError as err:
         term.warn(err)
         usage(argv[0])
@@ -95,6 +103,8 @@ def main(argv):
         elif opt in ('-f', '--file'):
             cfg.filemode = True
             cfg.filename = str(arg)
+        elif opt in ('-N', '--NativePCIe'):
+            cfg.pciemode = True 
         elif opt in ('--force-write'):
             cfg.forcewrite = True
         elif opt in ('-l', '--list'):
@@ -285,7 +295,8 @@ Options:
                           to guarantee that the target machine has successfully
                           granted the host DMA before attacking. If the
                           attack fails, try to increase this value. Default
-                          delay is 5 seconds.''')
+                          delay is 5 seconds.
+    -N, --NativePCIe      use a SlotScreamer card via pyUSB''')
 
 
 if __name__ == '__main__':

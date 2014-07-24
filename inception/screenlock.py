@@ -254,7 +254,7 @@ def attack(targets):
     Main attack logic
     '''
     # Initialize and lower DMA shield
-    if not cfg.filemode:
+    if not cfg.filemode and not cfg.pciemode:
         try:
             fw = firewire.FireWire()
         except IOError:
@@ -280,6 +280,9 @@ def attack(targets):
     if cfg.filemode:
         device = util.MemoryFile(cfg.filename, cfg.PAGESIZE)
         memsize = os.path.getsize(cfg.filename)
+    elif cfg.pciemode:
+        device = util.SlotScreamer()
+        memsize = cfg.memsize
     else:
         elapsed = int(time.time() - start)
         device = fw.getdevice(device_index, elapsed)
