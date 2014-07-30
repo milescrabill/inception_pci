@@ -149,22 +149,23 @@ class SlotScreamer:
         Constructor
         '''
         # find our device
-        self.dev = usb.core.find(idVendor=0x0525, idProduct=0x3380)
-        if self.dev is None:
-            raise ValueError('Device not found')
-        self.dev.set_configuration()
-        self.cfg = self.dev.get_active_configuration()
-        self.intf=self.cfg[0,0]
+        dev = usb.core.find(idVendor=0x0525, idProduct=0x3380)
+        assert dev is not None, 'device not found'
+        dev.set_configuration()
+        cfg = dev.get_active_configuration()
+        intf = cfg[0,0]
+
         self.pciin = usb.util.find_descriptor(self.intf,custom_match = lambda e: e.bEndpointAddress==0x8e)
-        assert self.pciin is not None
-        sys.stdout.write('PCIIN found: '+str(self.pciin)+'\n')
+        assert self.pciin is not None, 'pciin endpoint not found'
+        term.info('PCIIN found: '+str(self.pciin)+'\n')
+        
         self.pciout = usb.util.find_descriptor(self.intf,custom_match = lambda e: e.bEndpointAddress==0xe)
-        assert self.pciout is not None
-        sys.stdout.write('PCIOUT found: '+str(self.pciout)+'\n')
+        assert self.pciout is not None, 'pciout endpoint not found'
+        term.info('PCIOUT found: '+str(self.pciout)+'\n')
     
     def read(self, addr, numb, buf=None):
-        result=[]
-        dwords=math.ceil(numb/4)
+        result = []
+        dwords = math.ceil(numb/4)
 
         # save two least significant bits
         least = (addr >> 0) & 1
@@ -178,6 +179,7 @@ class SlotScreamer:
         try:
             self.cachedAddr
         except NameError:
+            term.info('read not cached')
             pass
         else:
             if self.cachedAddr <= addr <= self.cachedAddr + 0x40:
@@ -186,15 +188,15 @@ class SlotScreamer:
 
 
         # for each 64 dword block
-        while dwords>=0x40:
+        while dwords >= 0x40:
             #build the write packet
             self.pciout.write(struct.pack('BBBBI',0xcf,0,0,0x40,addr))
-            result+=self.pciin.read(0x100)
-            dwords-=0x40
-            addr+=0x40
-        if dwords>0:
+            result += self.pciin.read(0x100)
+            dwords -= 0x40
+            addr += 0x40
+        if dwords > 0:
             self.pciout.write(struct.pack('BBBBI',0xcf,0,0,dwords%0x40,addr))
-            result+=self.pciin.read(0x100)
+            result += self.pciin.read(0x100)
 
 
         # set up the cache
@@ -205,28 +207,28 @@ class SlotScreamer:
         offset = least + 2 * secondLeast
         result = result[offset:]
 
-        return struct.pack('B'*len(result),*result)    
+        return struct.pack('B'*len(result), *result)    
 
     def readv(self,req):
         # sort requests so sequential reads are cached
         req.sort()
         for r in req:
-            yield(r[0],self.read(r[0],r[1]))
+            yield(r[0], self.read(r[0],r[1]))
 
     def write(self, addr, buf):
-        dwords=math.ceil(len(buf)/4)
-        buf2=bytearray(dwords*4)
+        dwords = math.ceil(len(buf)/4)
+        buf2 = bytearray(dwords*4)
         #buf2=buf[:]
         #need to copy buf to buf2 and pad zeros, likely on both sides depending on dword alignment of the address. Need to properly set byte enables in the pciout write (bits 0-3, the f in 0x4f)
-        offset=0
-        print("addr:",addr," buf2:",buf2,"\n")
-        while dwords>=0x40:
+        offset = 0
+        term.info("addr:",addr," buf2:",buf2,"\n")
+        while dwords >= 0x40:
             #build the write packet
             self.pciout.write(struct.pack('BBBBI',0x4f,0,0,0x40,addr)+buf2[offset*4:offset*4+0x40])
-            dwords-=0x40
-            addr+=0x40
-            offset+=0x40
-        if dwords>0:
+            dwords -= 0x40
+            addr += 0x40
+            offset += 0x40
+        if dwords > 0:
             print (struct.pack('BBBBI',0x4f,0,0,dwords%0x40,addr))
             print (buf[offset*4:])
             self.pciout.write(struct.pack('BBBBI',0x4f,0,0,dwords%0x40,addr)+buf2[offset*4:])
