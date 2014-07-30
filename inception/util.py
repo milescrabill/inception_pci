@@ -164,15 +164,12 @@ class SlotScreamer:
         term.info('PCIOUT found: '+str(self.pciout)+'\n')
     
     def read(self, addr, numb, buf=None):
+
         result = []
-        dwords = math.ceil(numb/4)
 
-        # save two least significant bits
-        least = (addr >> 0) & 1
-        secondLeast = (addr >> 1) & 1
-
-        # set the two least significant bits to 0
-        addr = (addr & ~(1 << 0)) & ~(1 << 1)
+        # round down to multiple of 256
+        offset = addr % 256
+        current = addr - offset
 
         # cache most recent read
         # check if anything is cached
@@ -181,31 +178,32 @@ class SlotScreamer:
         except NameError:
             term.info('read not cached')
             pass
+        # if we have a previously cached read
         else:
-            if self.cachedAddr <= addr <= self.cachedAddr + 0x40:
-                result += self.cache[self.cachedAddr - addr:]
-                addr += self.cachedAddr - addr
+            # if the cached and current addresses are within 256 bytes of each other
+            # self.cachedAddr <= current means we can copy cached to start of current
+            if abs(self.cachedAddr - current) <= 0x40 and self.cachedAddr <= current:
 
+                #result += self.cache[current - cachedAddr:cachedAddr + 0x40]
 
-        # for each 64 dword block
-        while dwords >= 0x40:
-            #build the write packet
-            self.pciout.write(struct.pack('BBBBI',0xcf,0,0,0x40,addr))
+                # just copy the whole cache, deal with it later
+                result += self.cache
+
+                # add the number of dwords copied from cache to current address
+                current += cachedAddr - current + 0x40
+
+        while current < (addr + numb):
+            self.pciout.write(struct.pack('BBBBI', 0xcf, 0, 0, 0x40, current))
             result += self.pciin.read(0x100)
-            dwords -= 0x40
-            addr += 0x40
-        if dwords > 0:
-            self.pciout.write(struct.pack('BBBBI',0xcf,0,0,dwords%0x40,addr))
-            result += self.pciin.read(0x100)
+            current += 0x40
 
+        # chop off result
+        # sleepy, does this work?
+        result = result[offset:numb]
 
         # set up the cache
         self.cachedAddr = addr
         self.cache = result[:]
-
-        # offset result using saved least significant bits
-        offset = least + 2 * secondLeast
-        result = result[offset:]
 
         return struct.pack('B'*len(result), *result)    
 
