@@ -165,7 +165,27 @@ class SlotScreamer:
     def read(self, addr, numb, buf=None):
         result=[]
         dwords=math.ceil(numb/4)
-        #for each 64k block
+
+        # save two least significant bits
+        least = (addr >> 0) & 1
+        secondLeast = (addr >> 1) & 1
+
+        # set the two least significant bits to 0
+        addr = (addr & ~(1 << 0)) & ~(1 << 1)
+
+        # cache most recent read
+        # check if anything is cached
+        try:
+            self.cachedAddr
+        except NameError:
+            pass
+        else:
+            if self.cachedAddr <= addr <= self.cachedAddr + 0x40:
+                result += self.cache[self.cachedAddr - addr:]
+                addr += self.cachedAddr - addr
+
+
+        # for each 64 dword block
         while dwords>=0x40:
             #build the write packet
             self.pciout.write(struct.pack('BBBBI',0xcf,0,0,0x40,addr))
@@ -175,9 +195,21 @@ class SlotScreamer:
         if dwords>0:
             self.pciout.write(struct.pack('BBBBI',0xcf,0,0,dwords%0x40,addr))
             result+=self.pciin.read(0x100)
+
+
+        # set up the cache
+        self.cachedAddr = addr
+        self.cache = result[:]
+
+        # offset result using saved least significant bits
+        offset = least + 2 * secondLeast
+        result = result[offset:]
+
         return struct.pack('B'*len(result),*result)    
 
     def readv(self,req):
+        # sort requests so sequential reads are cached
+        req.sort()
         for r in req:
             yield(r[0],self.read(r[0],r[1]))
 
