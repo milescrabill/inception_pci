@@ -155,82 +155,66 @@ class SlotScreamer:
         cfg = dev.get_active_configuration()
         intf = cfg[0,0]
 
-        self.pciin = usb.util.find_descriptor(self.intf,custom_match = lambda e: e.bEndpointAddress==0x8e)
+        self.pciin = usb.util.find_descriptor(intf,custom_match = lambda e: e.bEndpointAddress==0x8e)
         assert self.pciin is not None, 'pciin endpoint not found'
         term.info('PCIIN found: '+str(self.pciin)+'\n')
         
-        self.pciout = usb.util.find_descriptor(self.intf,custom_match = lambda e: e.bEndpointAddress==0xe)
+        self.pciout = usb.util.find_descriptor(intf,custom_match = lambda e: e.bEndpointAddress==0xe)
         assert self.pciout is not None, 'pciout endpoint not found'
         term.info('PCIOUT found: '+str(self.pciout)+'\n')
+        self.cache=[]
     
     def read(self, addr, numb, buf=None):
-
-        result = []
-
-        # round down to multiple of 256
-        offset = addr % 256
-        current = addr - offset
-
-        # cache most recent read
-        # check if anything is cached
         try:
-            self.cachedAddr
-        except NameError:
-            term.info('read not cached')
-            pass
-        # if we have a previously cached read
-        else:
-            # if the cached and current addresses are within 256 bytes of each other
-            # self.cachedAddr <= current means we can copy cached to start of current
-            if abs(self.cachedAddr - current) <= 0x40 and self.cachedAddr <= current:
-
-                #result += self.cache[current - cachedAddr:cachedAddr + 0x40]
-
-                # just copy the whole cache, deal with it later
-                result += self.cache
-
-                # add the number of dwords copied from cache to current address
-                current += cachedAddr - current + 0x40
-
-        while current < (addr + numb):
-            self.pciout.write(struct.pack('BBBBI', 0xcf, 0, 0, 0x40, current))
-            result += self.pciin.read(0x100)
-            current += 0x40
-
-        # chop off result
-        # sleepy, does this work?
-        result = result[offset:numb]
-
-        # set up the cache
-        self.cachedAddr = addr
-        self.cache = result[:]
-
-        return struct.pack('B'*len(result), *result)    
-
+            # round down to multiple of 256
+            offset = addr % 256
+            baseAddress = addr - offset
+            endOffset = (addr+numb) % 256
+            endAddress = addr + numb - offset+256
+            # cache most recent read
+            # check if anything is cached
+            if (len(self.cache)>0):
+                if((self.cacheBase<=addr)and((self.cacheBase+len(self.cache))>(addr+numb))):
+                    return bytes(self.cache[(addr-self.cacheBase):(addr+numb)-self.cacheBase])
+            self.cache=[]
+            self.cacheBase=baseAddress
+            while baseAddress<endAddress:
+                self.pciout.write(struct.pack('BBBBI',0xcf,0,0,0x40,baseAddress))
+                self.cache+=self.pciin.read(0x100)
+                baseAddress+=256
+        except IOError:
+            self.cache=[]
+        return bytes(self.cache[offset:offset+numb])
+		  
     def readv(self,req):
         # sort requests so sequential reads are cached
-        req.sort()
+        #req.sort()
         for r in req:
             yield(r[0], self.read(r[0],r[1]))
 
     def write(self, addr, buf):
-        dwords = math.ceil(len(buf)/4)
-        buf2 = bytearray(dwords*4)
-        #buf2=buf[:]
-        #need to copy buf to buf2 and pad zeros, likely on both sides depending on dword alignment of the address. Need to properly set byte enables in the pciout write (bits 0-3, the f in 0x4f)
-        offset = 0
-        term.info("addr:",addr," buf2:",buf2,"\n")
-        while dwords >= 0x40:
-            #build the write packet
-            self.pciout.write(struct.pack('BBBBI',0x4f,0,0,0x40,addr)+buf2[offset*4:offset*4+0x40])
-            dwords -= 0x40
-            addr += 0x40
-            offset += 0x40
-        if dwords > 0:
-            print (struct.pack('BBBBI',0x4f,0,0,dwords%0x40,addr))
-            print (buf[offset*4:])
-            self.pciout.write(struct.pack('BBBBI',0x4f,0,0,dwords%0x40,addr)+buf2[offset*4:])
+        #calculate buffer
+        offset=addr%256
+        baseAddress=addr-numb
+        byteCount=len(buf)
+        endOffset=(addr+numb)%256
+        endAddress=addr+numb-endOffset+256
+        #read to fill buffer
+        readbuf=self.readPCI(baseAddress,endAddress-baseAddress)
+        #modify buffer
+        for i in range(offset,endOffset):
+            readbuf[i]=buf[i-offset]
+        #write buffer
+        bufferIndex=0
+        while baseAddress<endAddress:
+            subbuf=readbuf[bufferIndex:bufferIndex+128]
+            self.pciout.write(struct.pack('BBBBI'+'B'*256,0x4f,0,0,0x20,baseAddress,*subbuf))
+            baseAddress+=128
+            bufferIndex+=128
+        self.cache=[]
         
+    def close(self):
+        self.cache=[]
 
 class MemoryFile:
     '''
