@@ -184,6 +184,8 @@ class SlotScreamer:
                 baseAddress+=256
         except IOError:
             self.cache=[]
+            # check me
+            return bytes(b"bad" + b"\x10") * 64
         return bytes(self.cache[offset:offset+numb])
 		  
     def readv(self,req):
